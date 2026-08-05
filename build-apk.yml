@@ -2,7 +2,7 @@ name: Build SplitRunner APK
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   workflow_dispatch:
 
 permissions:
@@ -13,29 +13,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Baixar código
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configurar Flutter
+      - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      - name: Preparar projeto Android
-        run: |
-          rm -rf android
-          flutter create --platforms=android --project-name splitrunner .
-
-      - name: Instalar dependências
+      - name: Get dependencies
         run: flutter pub get
 
-      - name: Compilar APK release
+      - name: Build APK
         run: flutter build apk --release
 
-      - name: Disponibilizar APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: SplitRunner-APK
           path: build/app/outputs/flutter-apk/app-release.apk
-          if-no-files-found: error
