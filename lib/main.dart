@@ -1,36 +1,442 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-void main() => runApp(const SplitRunnerApp());
-
-class Split { String name; int? bestMs; Split({required this.name, this.bestMs});
-  Map<String,dynamic> toJson()=>{'name':name,'bestMs':bestMs};
-  factory Split.fromJson(Map<String,dynamic> j)=>Split(name:j['name'] ?? 'Split',bestMs:j['bestMs']); }
-
-class SplitRunnerApp extends StatelessWidget { const SplitRunnerApp({super.key});
-  @override Widget build(BuildContext context)=>MaterialApp(debugShowCheckedModeBanner:false,title:'SplitRunner',theme:ThemeData(brightness:Brightness.dark,useMaterial3:true,colorSchemeSeed:Colors.blue,scaffoldBackgroundColor:const Color(0xff101114)),home:const TimerPage()); }
-
-class TimerPage extends StatefulWidget { const TimerPage({super.key}); @override State<TimerPage> createState()=>_TimerPageState(); }
-class _TimerPageState extends State<TimerPage> {
-  final Stopwatch timer=Stopwatch(); Timer? ticker;
-  List<Split> splits=[Split(name:'Início'),Split(name:'Split 2'),Split(name:'Split 3'),Split(name:'Final')];
-  int current=0; bool finished=false;
-  @override void initState(){super.initState();load();}
-  @override void dispose(){ticker?.cancel();super.dispose();}
-  Future<void> load() async { final p=await SharedPreferences.getInstance(); final raw=p.getString('splits'); if(raw==null)return; try{final a=(jsonDecode(raw) as List).map((e)=>Split.fromJson(Map<String,dynamic>.from(e))).toList(); if(a.isNotEmpty&&mounted)setState(()=>splits=a);}catch(_){}}
-  Future<void> save() async { final p=await SharedPreferences.getInstance(); await p.setString('splits',jsonEncode(splits.map((e)=>e.toJson()).toList())); }
-  void start(){if(finished)reset();timer.start();ticker??=Timer.periodic(const Duration(milliseconds:30),(_){if(mounted)setState((){});});setState((){});}
-  void pause(){timer.stop();setState((){});}
-  void split(){if(!timer.isRunning||finished)return;if(current<splits.length-1){splits[current].bestMs??=timer.elapsedMilliseconds;current++;}else{finished=true;timer.stop();}save();setState((){});}
-  void reset(){timer..stop()..reset();current=0;finished=false;setState((){});}
-  String fmt(int ms){final m=(ms~/60000).toString().padLeft(2,'0');final s=((ms~/1000)%60).toString().padLeft(2,'0');final c=((ms%1000)~/10).toString().padLeft(2,'0');return '$m:$s.$c';}
-  Future<void> edit() async {final r=await Navigator.push<List<Split>>(context,MaterialPageRoute(builder:(_)=>SplitEditor(initial:splits)));if(r!=null&&r.isNotEmpty){setState((){splits=r;current=0;finished=false;});save();}}
-  @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('SplitRunner'),actions:[IconButton(onPressed:edit,icon:const Icon(Icons.edit_note))]),body:Column(children:[const SizedBox(height:12),Text(fmt(timer.elapsedMilliseconds),style:const TextStyle(fontSize:58,fontWeight:FontWeight.bold,fontFeatures:[FontFeature.tabularFigures()])),Text(finished?'FINALIZADO':timer.isRunning?'Split ${current+1}/${splits.length}':'PRONTO',style:const TextStyle(color:Colors.white70)),const SizedBox(height:12),Expanded(child:Card(margin:const EdgeInsets.symmetric(horizontal:12),child:ListView.builder(itemCount:splits.length,itemBuilder:(_,i){final active=i==current&&!finished;return ListTile(leading:CircleAvatar(radius:15,child:Text('${i+1}',style:const TextStyle(fontSize:12))),title:Text(splits[i].name,style:TextStyle(fontWeight:active?FontWeight.bold:FontWeight.normal)),trailing:Text(splits[i].bestMs==null?'--:--.--':fmt(splits[i].bestMs!)),tileColor:active?Theme.of(context).colorScheme.primary.withOpacity(.18):null);}))),Padding(padding:const EdgeInsets.all(12),child:Row(children:[Expanded(child:FilledButton.icon(onPressed:timer.isRunning?pause:start,icon:Icon(timer.isRunning?Icons.pause:Icons.play_arrow),label:Text(timer.isRunning?'PAUSAR':'INICIAR'))),const SizedBox(width:8),Expanded(child:FilledButton.tonalIcon(onPressed:timer.isRunning?split:null,icon:const Icon(Icons.flag),label:const Text('SPLIT'))),const SizedBox(width:8),IconButton.filledTonal(onPressed:reset,icon:const Icon(Icons.restart_alt))]))]));
+void main() {
+  runApp(const SplitRunnerApp());
 }
 
-class SplitEditor extends StatefulWidget { final List<Split> initial; const SplitEditor({super.key,required this.initial}); @override State<SplitEditor> createState()=>_SplitEditorState(); }
-class _SplitEditorState extends State<SplitEditor>{late List<Split> list; @override void initState(){super.initState();list=widget.initial.map((s)=>Split(name:s.name,bestMs:s.bestMs)).toList();}
- Future<void> rename(int i) async {final c=TextEditingController(text:list[i].name);final v=await showDialog<String>(context:context,builder:(_)=>AlertDialog(title:const Text('Nome do split'),content:TextField(controller:c,autofocus:true,decoration:const InputDecoration(hintText:'Ex.: Boss 1')),actions:[TextButton(onPressed:()=>Navigator.pop(context),child:const Text('Cancelar')),FilledButton(onPressed:()=>Navigator.pop(context,c.text.trim()),child:const Text('Salvar'))]));if(v!=null&&v.isNotEmpty)setState(()=>list[i].name=v);}
- @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('Editar splits'),actions:[IconButton(onPressed:()=>setState(()=>list.add(Split(name:'Novo Split'))),icon:const Icon(Icons.add)),TextButton(onPressed:()=>Navigator.pop(context,list),child:const Text('SALVAR'))]),body:ReorderableListView.builder(itemCount:list.length,onReorder:(a,b){setState((){if(b>a)b--;final x=list.removeAt(a);list.insert(b,x);});},itemBuilder:(_,i)=>ListTile(key:ValueKey('${list[i].name}-$i'),leading:const Icon(Icons.drag_handle),title:Text(list[i].name),subtitle:Text('Split ${i+1}'),onTap:()=>rename(i),trailing:IconButton(onPressed:list.length<=1?null:()=>setState(()=>list.removeAt(i)),icon:const Icon(Icons.delete_outline))})); }
+class Split {
+  String name;
+  int? bestMs;
+
+  Split({
+    required this.name,
+    this.bestMs,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'bestMs': bestMs,
+    };
+  }
+
+  factory Split.fromJson(Map<String, dynamic> json) {
+    return Split(
+      name: json['name'] as String,
+      bestMs: json['bestMs'] as int?,
+    );
+  }
+}
+
+class SplitRunnerApp extends StatelessWidget {
+  const SplitRunnerApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'SplitRunner',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        colorSchemeSeed: Colors.blue,
+        useMaterial3: true,
+      ),
+      home: const TimerPage(),
+    );
+  }
+}
+
+class TimerPage extends StatefulWidget {
+  const TimerPage({super.key});
+
+  @override
+  State<TimerPage> createState() => _TimerPageState();
+}
+
+class _TimerPageState extends State<TimerPage> {
+  final Stopwatch timer = Stopwatch();
+
+  Timer? ticker;
+
+  List<Split> splits = [
+    Split(name: 'Início'),
+    Split(name: 'Split 1'),
+    Split(name: 'Split 2'),
+    Split(name: 'Final'),
+  ];
+
+  int current = 0;
+  bool finished = false;
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  @override
+  void dispose() {
+    ticker?.cancel();
+    super.dispose();
+  }
+
+  Future<void> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = prefs.getString('splits');
+
+    if (data != null) {
+      final decoded = jsonDecode(data) as List;
+
+      setState(() {
+        splits = decoded
+            .map(
+              (item) => Split.fromJson(
+                Map<String, dynamic>.from(item),
+              ),
+            )
+            .toList();
+      });
+    }
+  }
+
+  Future<void> save() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.setString(
+      'splits',
+      jsonEncode(
+        splits.map((split) => split.toJson()).toList(),
+      ),
+    );
+  }
+
+  void start() {
+    if (finished) {
+      reset();
+    }
+
+    timer.start();
+
+    ticker?.cancel();
+
+    ticker = Timer.periodic(
+      const Duration(milliseconds: 30),
+      (_) {
+        setState(() {});
+      },
+    );
+
+    setState(() {});
+  }
+
+  void pause() {
+    timer.stop();
+    ticker?.cancel();
+
+    setState(() {});
+  }
+
+  void split() {
+    if (!timer.isRunning || finished) {
+      return;
+    }
+
+    if (current < splits.length - 1) {
+      setState(() {
+        current++;
+      });
+    } else {
+      timer.stop();
+      ticker?.cancel();
+
+      setState(() {
+        finished = true;
+      });
+    }
+  }
+
+  void reset() {
+    timer
+      ..stop()
+      ..reset();
+
+    ticker?.cancel();
+
+    setState(() {
+      current = 0;
+      finished = false;
+    });
+  }
+
+  String formatTime(int milliseconds) {
+    final minutes = milliseconds ~/ 60000;
+    final seconds = (milliseconds % 60000) ~/ 1000;
+    final ms = (milliseconds % 1000) ~/ 10;
+
+    return '${minutes.toString().padLeft(2, '0')}:'
+        '${seconds.toString().padLeft(2, '0')}.'
+        '${ms.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> editSplits() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SplitEditor(
+          splits: splits,
+          onChanged: (newSplits) {
+            splits = newSplits;
+            save();
+            setState(() {});
+          },
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final elapsed = timer.elapsedMilliseconds;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('SplitRunner'),
+        actions: [
+          IconButton(
+            tooltip: 'Editar splits',
+            onPressed: editSplits,
+            icon: const Icon(Icons.edit),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          const SizedBox(height: 30),
+
+          Text(
+            formatTime(elapsed),
+            style: const TextStyle(
+              fontSize: 56,
+              fontWeight: FontWeight.bold,
+              fontFeatures: [
+                FontFeature.tabularFigures(),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          Text(
+            finished
+                ? 'FINALIZADO'
+                : 'Split ${current + 1} / ${splits.length}',
+            style: const TextStyle(
+              fontSize: 18,
+            ),
+          ),
+
+          const SizedBox(height: 30),
+
+          Expanded(
+            child: ListView.builder(
+              itemCount: splits.length,
+              itemBuilder: (context, index) {
+                final split = splits[index];
+
+                return ListTile(
+                  leading: CircleAvatar(
+                    child: Text('${index + 1}'),
+                  ),
+                  title: Text(split.name),
+                  trailing: index == current
+                      ? const Icon(
+                          Icons.play_arrow,
+                          color: Colors.green,
+                        )
+                      : null,
+                );
+              },
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: timer.isRunning ? split : start,
+                    icon: Icon(
+                      timer.isRunning
+                          ? Icons.flag
+                          : Icons.play_arrow,
+                    ),
+                    label: Text(
+                      timer.isRunning ? 'SPLIT' : 'START',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: timer.isRunning ? pause : reset,
+                    icon: Icon(
+                      timer.isRunning
+                          ? Icons.pause
+                          : Icons.refresh,
+                    ),
+                    label: Text(
+                      timer.isRunning ? 'PAUSAR' : 'RESET',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class SplitEditor extends StatefulWidget {
+  final List<Split> splits;
+  final ValueChanged<List<Split>> onChanged;
+
+  const SplitEditor({
+    super.key,
+    required this.splits,
+    required this.onChanged,
+  });
+
+  @override
+  State<SplitEditor> createState() => _SplitEditorState();
+}
+
+class _SplitEditorState extends State<SplitEditor> {
+  late List<Split> list;
+
+  @override
+  void initState() {
+    super.initState();
+
+    list = widget.splits
+        .map(
+          (split) => Split(
+            name: split.name,
+            bestMs: split.bestMs,
+          ),
+        )
+        .toList();
+  }
+
+  Future<void> rename(int index) async {
+    final controller = TextEditingController(
+      text: list[index].name,
+    );
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Renomear split'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Nome',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('CANCELAR'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(
+                  context,
+                  controller.text.trim(),
+                );
+              },
+              child: const Text('SALVAR'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != null && result.isNotEmpty) {
+      setState(() {
+        list[index].name = result;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Editar splits'),
+        actions: [
+          IconButton(
+            tooltip: 'Adicionar split',
+            onPressed: () {
+              setState(() {
+                list.add(
+                  Split(
+                    name: 'Novo Split',
+                  ),
+                );
+              });
+            },
+            icon: const Icon(Icons.add),
+          ),
+          TextButton(
+            onPressed: () {
+              widget.onChanged(list);
+              Navigator.pop(context);
+            },
+            child: const Text('SALVAR'),
+          ),
+        ],
+      ),
+      body: ReorderableListView.builder(
+        itemCount: list.length,
+        onReorder: (oldIndex, newIndex) {
+          setState(() {
+            if (newIndex > oldIndex) {
+              newIndex--;
+            }
+
+            final item = list.removeAt(oldIndex);
+            list.insert(newIndex, item);
+          });
+        },
+        itemBuilder: (context, index) {
+          final split = list[index];
+
+          return ListTile(
+            key: ValueKey(split),
+            title: Text(split.name),
+            onTap: () => rename(index),
+            trailing: IconButton(
+              onPressed: list.length <= 1
+                  ? null
+                  : () {
+                      setState(() {
+                        list.removeAt(index);
+                      });
+                    },
+              icon: const Icon(Icons.delete_outline),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
