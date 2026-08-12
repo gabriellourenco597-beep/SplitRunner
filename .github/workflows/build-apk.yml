@@ -1,4 +1,4 @@
-name: Build SplitRunner APK
+ name: Build SplitRunner APK
 
 on:
   push:
@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -23,56 +24,72 @@ jobs:
           cache: true
 
       - name: Create Android project
-        run: flutter create --platforms=android .
+        run: |
+          flutter create \
+            --platforms=android \
+            --org com \
+            --project-name splitrunner \
+            .
+
+      - name: Configure Android package
+        run: |
+          sed -i 's/applicationId = ".*"/applicationId = "com.splitrunner"/' android/app/build.gradle.kts || true
+          sed -i 's/applicationId ".*"/applicationId "com.splitrunner"/' android/app/build.gradle || true
+          sed -i 's/namespace = ".*"/namespace = "com.splitrunner"/' android/app/build.gradle.kts || true
+          sed -i 's/namespace ".*"/namespace "com.splitrunner"/' android/app/build.gradle || true
+
+      - name: Install MainActivity
+        run: |
+          mkdir -p android/app/src/main/kotlin/com/splitrunner
+          cp MainActivity.kt android/app/src/main/kotlin/com/splitrunner/MainActivity.kt
+
+      - name: Install OverlayService
+        run: |
+          cp OverlayService.kt android/app/src/main/kotlin/com/splitrunner/OverlayService.kt
+
+      - name: Configure AndroidManifest
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+
+          text = manifest.read_text()
+
+          permission = '<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />'
+
+          if permission not in text:
+              text = text.replace(
+                  '<manifest',
+                  '<manifest',
+                  1
+              )
+
+              pos = text.find('>')
+
+              text = text[:pos+1] + '\n    ' + permission + text[pos+1:]
+
+          service = '''
+              <service
+                  android:name=".OverlayService"
+                  android:exported="false"
+                  android:stopWithTask="false" />
+          '''
+
+          if '.OverlayService' not in text:
+              text = text.replace(
+                  '</application>',
+                  service + '\n    </application>'
+              )
+
+          manifest.write_text(text)
+          PY
 
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Install native Overlay files
-        run: |
-          mkdir -p android/app/src/main/kotlin/com/splitrunner
-
-          cp MainActivity.kt \
-            android/app/src/main/kotlin/com/splitrunner/MainActivity.kt
-
-          cp OverlayService.kt \
-            android/app/src/main/kotlin/com/splitrunner/OverlayService.kt
-
-      - name: Fix package names
-        run: |
-          sed -i 's/package com\.example\.[^ ]*/package com.splitrunner/' \
-            android/app/src/main/kotlin/com/splitrunner/MainActivity.kt
-
-          sed -i 's/package com\.example\.[^ ]*/package com.splitrunner/' \
-            android/app/src/main/kotlin/com/splitrunner/OverlayService.kt
-
-      - name: Configure Android Manifest
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          p = Path("android/app/src/main/AndroidManifest.xml")
-          text = p.read_text()
-
-          if "android.permission.SYSTEM_ALERT_WINDOW" not in text:
-              text = text.replace(
-                  '<application',
-                  '<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>\n\n    <application',
-                  1
-              )
-
-          if 'android:name=".OverlayService"' not in text:
-              text = text.replace(
-                  '</application>',
-                  '''<service
-              android:name=".OverlayService"
-              android:exported="false"
-              android:stopWithTask="false" />
-          </application>'''
-              )
-
-          p.write_text(text)
-          PY
+      - name: Analyze
+        run: flutter analyze
 
       - name: Build APK
         run: flutter build apk --release
@@ -81,4 +98,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SplitRunner-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/app-release.apk      
