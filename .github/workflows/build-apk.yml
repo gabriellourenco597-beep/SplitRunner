@@ -16,16 +16,10 @@ jobs:
 
     steps:
 
-      # ============================================================
-      # 1. BAIXAR O PROJETO
-      # ============================================================
       - name: Checkout
         uses: actions/checkout@v4
 
 
-      # ============================================================
-      # 2. INSTALAR FLUTTER
-      # ============================================================
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -33,142 +27,117 @@ jobs:
           cache: true
 
 
-      # ============================================================
-      # 3. CRIAR A ESTRUTURA ANDROID
-      # ============================================================
       - name: Create Android project
         run: |
           flutter create \
             --platforms=android \
-            --org com.splitrunner \
+            --org com \
+            --project-name splitrunner \
             .
 
 
-      # ============================================================
-      # 4. PREPARAR PASTAS KOTLIN
-      # ============================================================
-      - name: Prepare Android files
-        run: |
-          mkdir -p android/app/src/main/kotlin/com/splitrunner
-
-
-      # ============================================================
-      # 5. COPIAR MAINACTIVITY
-      # ============================================================
-      - name: Install MainActivity
-        run: |
-          if [ -f MainActivity.kt ]; then
-            cp MainActivity.kt \
-            android/app/src/main/kotlin/com/splitrunner/MainActivity.kt
-          else
-            echo "MainActivity.kt não encontrado"
-            exit 1
-          fi
-
-
-      # ============================================================
-      # 6. COPIAR OVERLAYSERVICE
-      # ============================================================
-      - name: Install OverlayService
-        run: |
-          if [ -f OverlayService.kt ]; then
-            cp OverlayService.kt \
-            android/app/src/main/kotlin/com/splitrunner/OverlayService.kt
-          else
-            echo "OverlayService.kt não encontrado"
-            exit 1
-          fi
-
-
-      # ============================================================
-      # 7. CONFIGURAR ANDROIDMANIFEST
-      # ============================================================
-      - name: Configure AndroidManifest
-        run: |
-          python3 <<'PY'
-          from pathlib import Path
-
-          manifest = Path(
-              "android/app/src/main/AndroidManifest.xml"
-          )
-
-          text = manifest.read_text()
-
-          # Permissão de overlay
-          if "android.permission.SYSTEM_ALERT_WINDOW" not in text:
-              text = text.replace(
-                  "<manifest",
-                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android"'
-              )
-
-              marker = ">"
-
-              pos = text.find(marker)
-
-              text = (
-                  text[:pos+1]
-                  + '\n'
-                  + '    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />\n'
-                  + '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n'
-                  + '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />\n'
-                  + '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n'
-                  + text[pos+1:]
-              )
-
-          # Serviço do Overlay
-          if "OverlayService" not in text:
-              service = '''
-                  <service
-                      android:name=".OverlayService"
-                      android:exported="false"
-                      android:stopWithTask="false"
-                      android:foregroundServiceType="specialUse">
-                      <property
-                          android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                          android:value="Display speedrun timer overlay over other applications" />
-                  </service>
-              '''
-
-              text = text.replace(
-                  "</application>",
-                  service + "\n    </application>"
-              )
-
-          manifest.write_text(text)
-          PY
-
-
-      # ============================================================
-      # 8. DEPENDÊNCIAS
-      # ============================================================
       - name: Get dependencies
         run: |
           flutter pub get
 
 
-      # ============================================================
-      # 9. LIMPAR PROJETO
-      # ============================================================
+      - name: Install MainActivity
+        run: |
+          mkdir -p android/app/src/main/kotlin/com/splitrunner
+          cp MainActivity.kt android/app/src/main/kotlin/com/splitrunner/MainActivity.kt
+
+
+      - name: Install OverlayService
+        run: |
+          cp OverlayService.kt android/app/src/main/kotlin/com/splitrunner/OverlayService.kt
+
+
+      - name: Create AndroidManifest
+        run: |
+          cat > android/app/src/main/AndroidManifest.xml <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+              <application
+                  android:label="SplitRunner"
+                  android:name="${applicationName}"
+                  android:icon="@mipmap/ic_launcher">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:launchMode="singleTop"
+                      android:theme="@style/LaunchTheme"
+                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|layoutDirection|fontScale|screenLayout|density|uiMode"
+                      android:hardwareAccelerated="true"
+                      android:windowSoftInputMode="adjustResize">
+
+                      <meta-data
+                          android:name="io.flutter.embedding.android.NormalTheme"
+                          android:resource="@style/NormalTheme" />
+
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+
+                  </activity>
+
+                  <service
+                      android:name=".OverlayService"
+                      android:exported="false"
+                      android:stopWithTask="false"
+                      android:foregroundServiceType="specialUse">
+
+                      <property
+                          android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                          android:value="Speedrun timer overlay" />
+
+                  </service>
+
+                  <meta-data
+                      android:name="flutterEmbedding"
+                      android:value="2" />
+
+              </application>
+
+          </manifest>
+          EOF
+
+
+      - name: Verify Android files
+        run: |
+          echo "===== MainActivity ====="
+          cat android/app/src/main/kotlin/com/splitrunner/MainActivity.kt
+
+          echo "===== OverlayService ====="
+          cat android/app/src/main/kotlin/com/splitrunner/OverlayService.kt
+
+          echo "===== AndroidManifest ====="
+          cat android/app/src/main/AndroidManifest.xml
+
+
       - name: Flutter clean
         run: |
           flutter clean
           flutter pub get
 
 
-      # ============================================================
-      # 10. GERAR APK
-      # ============================================================
       - name: Build APK
         run: |
           flutter build apk --release
 
 
-      # ============================================================
-      # 11. ENVIAR APK
-      # ============================================================
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: SplitRunner-APK
           path: build/app/outputs/flutter-apk/app-release.apk
-          if-no-files-found: error              
+          if-no-files-found: error           
