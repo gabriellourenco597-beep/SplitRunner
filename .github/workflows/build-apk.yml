@@ -2,7 +2,9 @@ name: Build SplitRunner APK
 
 on:
   push:
-    branches: [main, master]
+    branches:
+      - main
+      - master
   workflow_dispatch:
 
 permissions:
@@ -14,83 +16,159 @@ jobs:
 
     steps:
 
+      # ============================================================
+      # 1. BAIXAR O PROJETO
+      # ============================================================
       - name: Checkout
         uses: actions/checkout@v4
 
+
+      # ============================================================
+      # 2. INSTALAR FLUTTER
+      # ============================================================
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
+
+      # ============================================================
+      # 3. CRIAR A ESTRUTURA ANDROID
+      # ============================================================
       - name: Create Android project
         run: |
           flutter create \
             --platforms=android \
-            --org com \
-            --project-name splitrunner \
+            --org com.splitrunner \
             .
 
-      - name: Configure Android package
-        run: |
-          sed -i 's/applicationId = ".*"/applicationId = "com.splitrunner"/' android/app/build.gradle.kts || true
-          sed -i 's/applicationId ".*"/applicationId "com.splitrunner"/' android/app/build.gradle || true
-          sed -i 's/namespace = ".*"/namespace = "com.splitrunner"/' android/app/build.gradle.kts || true
-          sed -i 's/namespace ".*"/namespace "com.splitrunner"/' android/app/build.gradle || true
 
-      - name: Install MainActivity
+      # ============================================================
+      # 4. PREPARAR PASTAS KOTLIN
+      # ============================================================
+      - name: Prepare Android files
         run: |
           mkdir -p android/app/src/main/kotlin/com/splitrunner
-          cp MainActivity.kt android/app/src/main/kotlin/com/splitrunner/MainActivity.kt
 
+
+      # ============================================================
+      # 5. COPIAR MAINACTIVITY
+      # ============================================================
+      - name: Install MainActivity
+        run: |
+          if [ -f MainActivity.kt ]; then
+            cp MainActivity.kt \
+            android/app/src/main/kotlin/com/splitrunner/MainActivity.kt
+          else
+            echo "MainActivity.kt não encontrado"
+            exit 1
+          fi
+
+
+      # ============================================================
+      # 6. COPIAR OVERLAYSERVICE
+      # ============================================================
       - name: Install OverlayService
         run: |
-          cp OverlayService.kt android/app/src/main/kotlin/com/splitrunner/OverlayService.kt
+          if [ -f OverlayService.kt ]; then
+            cp OverlayService.kt \
+            android/app/src/main/kotlin/com/splitrunner/OverlayService.kt
+          else
+            echo "OverlayService.kt não encontrado"
+            exit 1
+          fi
 
+
+      # ============================================================
+      # 7. CONFIGURAR ANDROIDMANIFEST
+      # ============================================================
       - name: Configure AndroidManifest
         run: |
           python3 <<'PY'
           from pathlib import Path
 
-          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          manifest = Path(
+              "android/app/src/main/AndroidManifest.xml"
+          )
+
           text = manifest.read_text()
 
-          permission = '<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />'
-
-          if permission not in text:
-              pos = text.find('>')
-              text = text[:pos+1] + '\n    ' + permission + text[pos+1:]
-
-          service = '''
-              <service
-                  android:name=".OverlayService"
-                  android:exported="false"
-                  android:stopWithTask="false" />
-          '''
-
-          if '.OverlayService' not in text:
+          # Permissão de overlay
+          if "android.permission.SYSTEM_ALERT_WINDOW" not in text:
               text = text.replace(
-                  '</application>',
-                  service + '\n    </application>'
+                  "<manifest",
+                  '<manifest xmlns:android="http://schemas.android.com/apk/res/android"'
+              )
+
+              marker = ">"
+
+              pos = text.find(marker)
+
+              text = (
+                  text[:pos+1]
+                  + '\n'
+                  + '    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />\n'
+                  + '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n'
+                  + '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />\n'
+                  + '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n'
+                  + text[pos+1:]
+              )
+
+          # Serviço do Overlay
+          if "OverlayService" not in text:
+              service = '''
+                  <service
+                      android:name=".OverlayService"
+                      android:exported="false"
+                      android:stopWithTask="false"
+                      android:foregroundServiceType="specialUse">
+                      <property
+                          android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                          android:value="Display speedrun timer overlay over other applications" />
+                  </service>
+              '''
+
+              text = text.replace(
+                  "</application>",
+                  service + "\n    </application>"
               )
 
           manifest.write_text(text)
           PY
 
+
+      # ============================================================
+      # 8. DEPENDÊNCIAS
+      # ============================================================
       - name: Get dependencies
-        run: flutter pub get
+        run: |
+          flutter pub get
 
-      - name: Remove old Flutter test
-        run: rm -rf test
 
-      - name: Analyze
-        run: flutter analyze
+      # ============================================================
+      # 9. LIMPAR PROJETO
+      # ============================================================
+      - name: Flutter clean
+        run: |
+          flutter clean
+          flutter pub get
 
+
+      # ============================================================
+      # 10. GERAR APK
+      # ============================================================
       - name: Build APK
-        run: flutter build apk --release
+        run: |
+          flutter build apk --release
 
+
+      # ============================================================
+      # 11. ENVIAR APK
+      # ============================================================
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: SplitRunner-APK
-          path: build/app/outputs/flutter-apk/app-release.apk           
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error              
