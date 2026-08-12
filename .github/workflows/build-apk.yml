@@ -23,10 +23,12 @@ jobs:
           cache: true
 
       - name: Create Android project
-        run: |
-          flutter create --platforms=android .
+        run: flutter create --platforms=android .
 
-      - name: Configure SplitRunner Android package
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Install native Overlay files
         run: |
           mkdir -p android/app/src/main/kotlin/com/splitrunner
 
@@ -36,14 +38,41 @@ jobs:
           cp OverlayService.kt \
             android/app/src/main/kotlin/com/splitrunner/OverlayService.kt
 
-          cp AndroidManifest.xml \
-            android/app/src/main/AndroidManifest.xml
+      - name: Fix package names
+        run: |
+          sed -i 's/package com\.example\.[^ ]*/package com.splitrunner/' \
+            android/app/src/main/kotlin/com/splitrunner/MainActivity.kt
 
-          sed -i 's/applicationId "com.example.[^"]*"/applicationId "com.splitrunner"/' android/app/build.gradle
-          sed -i 's/namespace = "com.example.[^"]*"/namespace = "com.splitrunner"/' android/app/build.gradle
+          sed -i 's/package com\.example\.[^ ]*/package com.splitrunner/' \
+            android/app/src/main/kotlin/com/splitrunner/OverlayService.kt
 
-      - name: Get dependencies
-        run: flutter pub get
+      - name: Configure Android Manifest
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("android/app/src/main/AndroidManifest.xml")
+          text = p.read_text()
+
+          if "android.permission.SYSTEM_ALERT_WINDOW" not in text:
+              text = text.replace(
+                  '<application',
+                  '<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>\n\n    <application',
+                  1
+              )
+
+          if 'android:name=".OverlayService"' not in text:
+              text = text.replace(
+                  '</application>',
+                  '''<service
+              android:name=".OverlayService"
+              android:exported="false"
+              android:stopWithTask="false" />
+          </application>'''
+              )
+
+          p.write_text(text)
+          PY
 
       - name: Build APK
         run: flutter build apk --release
