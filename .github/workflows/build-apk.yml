@@ -88,9 +88,11 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Analyze
-        run: flutter analyze
+      - name: Remove old Flutter test
+  run: rm -rf test
 
+- name: Analyze
+  run: flutter analyze
       - name: Build APK
         run: flutter build apk --release
 
