@@ -53,20 +53,12 @@ jobs:
           from pathlib import Path
 
           manifest = Path("android/app/src/main/AndroidManifest.xml")
-
           text = manifest.read_text()
 
           permission = '<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />'
 
           if permission not in text:
-              text = text.replace(
-                  '<manifest',
-                  '<manifest',
-                  1
-              )
-
               pos = text.find('>')
-
               text = text[:pos+1] + '\n    ' + permission + text[pos+1:]
 
           service = '''
@@ -89,10 +81,11 @@ jobs:
         run: flutter pub get
 
       - name: Remove old Flutter test
-  run: rm -rf test
+        run: rm -rf test
 
-- name: Analyze
-  run: flutter analyze
+      - name: Analyze
+        run: flutter analyze
+
       - name: Build APK
         run: flutter build apk --release
 
@@ -100,4 +93,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SplitRunner-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/app-release.apk           
