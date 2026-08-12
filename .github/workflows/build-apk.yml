@@ -1,4 +1,4 @@
- name: Build SplitRunner APK
+name: Build SplitRunner APK
 
 on:
   push:
@@ -98,4 +98,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SplitRunner-APK
-          path: build/app/outputs/flutter-apk/app-release.apk      
+          path: build/app/outputs/flutter-apk/app-release.apk
