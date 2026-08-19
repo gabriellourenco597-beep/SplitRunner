@@ -1,6 +1,9 @@
-package com.splitrunner
+  package com.splitrunner
 
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -13,15 +16,109 @@ class MainActivity : FlutterActivity() {
 
     private val CHANNEL = "splitrunner/overlay"
 
+    private lateinit var methodChannel: MethodChannel
+
+    // ============================================================
+    // RECEBE COMANDOS DO OVERLAY
+    // ============================================================
+
+    private val overlayReceiver = object : BroadcastReceiver() {
+
+        override fun onReceive(
+            context: Context?,
+            intent: Intent?
+        ) {
+
+            when (intent?.action) {
+
+                OverlayService.ACTION_TOGGLE -> {
+
+                    if (::methodChannel.isInitialized) {
+
+                        methodChannel.invokeMethod(
+                            "toggleTimerFromOverlay",
+                            null
+                        )
+                    }
+                }
+
+                OverlayService.ACTION_RESTART -> {
+
+                    if (::methodChannel.isInitialized) {
+
+                        methodChannel.invokeMethod(
+                            "restartTimerFromOverlay",
+                            null
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // ============================================================
+    // ON CREATE
+    // ============================================================
+
+    override fun onCreate(
+        savedInstanceState: Bundle?
+    ) {
+
+        super.onCreate(savedInstanceState)
+
+        val filter = IntentFilter().apply {
+
+            addAction(
+                OverlayService.ACTION_TOGGLE
+            )
+
+            addAction(
+                OverlayService.ACTION_RESTART
+            )
+        }
+
+        if (
+            Build.VERSION.SDK_INT >=
+            Build.VERSION_CODES.TIRAMISU
+        ) {
+
+            registerReceiver(
+                overlayReceiver,
+                filter,
+                Context.RECEIVER_NOT_EXPORTED
+            )
+
+        } else {
+
+            @Suppress("DEPRECATION")
+
+            registerReceiver(
+                overlayReceiver,
+                filter
+            )
+        }
+    }
+
+    // ============================================================
+    // FLUTTER ENGINE
+    // ============================================================
+
     override fun configureFlutterEngine(
         flutterEngine: FlutterEngine
     ) {
-        super.configureFlutterEngine(flutterEngine)
 
-        MethodChannel(
+        super.configureFlutterEngine(
+            flutterEngine
+        )
+
+        methodChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             CHANNEL
-        ).setMethodCallHandler { call, result ->
+        )
+
+        methodChannel.setMethodCallHandler {
+            call,
+            result ->
 
             when (call.method) {
 
@@ -32,9 +129,17 @@ class MainActivity : FlutterActivity() {
                 "isOverlayGranted" -> {
 
                     val granted =
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                            Settings.canDrawOverlays(this)
+                        if (
+                            Build.VERSION.SDK_INT >=
+                            Build.VERSION_CODES.M
+                        ) {
+
+                            Settings.canDrawOverlays(
+                                this
+                            )
+
                         } else {
+
                             true
                         }
 
@@ -49,22 +154,18 @@ class MainActivity : FlutterActivity() {
 
                     if (
                         Build.VERSION.SDK_INT >=
-                        Build.VERSION_CODES.M
+                        Build.VERSION_CODES.M &&
+                        !Settings.canDrawOverlays(this)
                     ) {
 
-                        if (
-                            !Settings.canDrawOverlays(this)
-                        ) {
-
-                            val intent = Intent(
-                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                Uri.parse(
-                                    "package:$packageName"
-                                )
+                        val intent = Intent(
+                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse(
+                                "package:$packageName"
                             )
+                        )
 
-                            startActivity(intent)
-                        }
+                        startActivity(intent)
                     }
 
                     result.success(null)
@@ -128,9 +229,17 @@ class MainActivity : FlutterActivity() {
                         )
                     }
 
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        startForegroundService(intent)
+                    if (
+                        Build.VERSION.SDK_INT >=
+                        Build.VERSION_CODES.O
+                    ) {
+
+                        startForegroundService(
+                            intent
+                        )
+
                     } else {
+
                         startService(intent)
                     }
 
@@ -169,20 +278,28 @@ class MainActivity : FlutterActivity() {
                             "current",
                             call.argument<String>(
                                 "current"
-                            )
+                            ) ?: "Início"
                         )
 
                         putExtra(
                             "next",
                             call.argument<String>(
                                 "next"
-                            )
+                            ) ?: "FINAL"
                         )
                     }
 
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        startForegroundService(intent)
+                    if (
+                        Build.VERSION.SDK_INT >=
+                        Build.VERSION_CODES.O
+                    ) {
+
+                        startForegroundService(
+                            intent
+                        )
+
                     } else {
+
                         startService(intent)
                     }
 
@@ -199,6 +316,7 @@ class MainActivity : FlutterActivity() {
                         this,
                         OverlayService::class.java
                     ).apply {
+
                         action =
                             OverlayService.ACTION_STOP
                     }
@@ -218,5 +336,22 @@ class MainActivity : FlutterActivity() {
             }
         }
     }
-}
-                
+
+    // ============================================================
+    // DESTROY
+    // ============================================================
+
+    override fun onDestroy() {
+
+        try {
+
+            unregisterReceiver(
+                overlayReceiver
+            )
+
+        } catch (_: Exception) {
+        }
+
+        super.onDestroy()
+    }
+}               
