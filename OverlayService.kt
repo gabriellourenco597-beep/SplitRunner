@@ -1,4 +1,4 @@
-package com.splitrunner
+  package com.splitrunner
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -22,71 +22,128 @@ import android.widget.TextView
 class OverlayService : Service() {
 
     companion object {
-        const val ACTION_START = "splitrunner.START"
-        const val ACTION_UPDATE = "splitrunner.UPDATE"
-        const val ACTION_STOP = "splitrunner.STOP"
 
-        private const val CHANNEL_ID = "splitrunner_overlay"
-        private const val NOTIFICATION_ID = 2211
+        const val ACTION_START =
+            "splitrunner.START"
 
-        // Tempo máximo entre dois toques para considerar double tap
-        private const val DOUBLE_TAP_TIMEOUT = 300L
+        const val ACTION_UPDATE =
+            "splitrunner.UPDATE"
 
-        // Distância máxima para considerar toque em vez de arrasto
-        private const val TOUCH_SLOP = 20f
+        const val ACTION_STOP =
+            "splitrunner.STOP"
+
+        // Comandos enviados do Overlay para o Flutter
+        const val ACTION_TOGGLE =
+            "splitrunner.OVERLAY_TOGGLE"
+
+        const val ACTION_RESTART =
+            "splitrunner.OVERLAY_RESTART"
+
+        private const val CHANNEL_ID =
+            "splitrunner_overlay"
+
+        private const val NOTIFICATION_ID =
+            2211
+
+        private const val DOUBLE_TAP_DELAY =
+            280L
+
+        private const val TOUCH_SLOP =
+            20f
     }
 
     private lateinit var windowManager: WindowManager
 
     private var overlayView: LinearLayout? = null
+
     private var timerText: TextView? = null
+
     private var currentText: TextView? = null
+
     private var nextText: TextView? = null
 
-    private val handler = Handler(Looper.getMainLooper())
+    private val handler =
+        Handler(Looper.getMainLooper())
 
-    private var baseElapsed = 0L
-    private var startedAt = 0L
-    private var running = false
+    private var baseElapsed =
+        0L
 
-    private var current = "Início"
-    private var next = "FINAL"
+    private var startedAt =
+        0L
 
-    private var params: WindowManager.LayoutParams? = null
+    private var running =
+        false
+
+    private var current =
+        "Início"
+
+    private var next =
+        "FINAL"
+
+    private var params:
+        WindowManager.LayoutParams? = null
 
     // ============================================================
-    // CONTROLE DE TOQUES
+    // CONTROLE DE TOQUE
     // ============================================================
 
-    private var lastTapTime = 0L
+    private var downX =
+        0f
 
-    private var tapDownX = 0f
-    private var tapDownY = 0f
+    private var downY =
+        0f
 
-    private var isDragging = false
+    private var startX =
+        0
 
-    private val singleTapRunnable = Runnable {
-        if (!isDragging) {
-            toggleTimer()
+    private var startY =
+        0
+
+    private var moved =
+        false
+
+    private var waitingSecondTap =
+        false
+
+    // ============================================================
+    // PRIMEIRO TOQUE
+    // ============================================================
+
+    private val singleTapRunnable =
+        Runnable {
+
+            waitingSecondTap =
+                false
+
+            sendOverlayAction(
+                ACTION_TOGGLE
+            )
         }
-    }
 
     // ============================================================
-    // ATUALIZAÇÃO DO TIMER
+    // ATUALIZAÇÃO
     // ============================================================
 
-    private val updater = object : Runnable {
-        override fun run() {
-            updateUi()
-            handler.postDelayed(this, 50)
+    private val updater =
+        object : Runnable {
+
+            override fun run() {
+
+                updateUi()
+
+                handler.postDelayed(
+                    this,
+                    50
+                )
+            }
         }
-    }
 
     // ============================================================
     // ON CREATE
     // ============================================================
 
     override fun onCreate() {
+
         super.onCreate()
 
         createNotificationChannel()
@@ -97,7 +154,9 @@ class OverlayService : Service() {
         )
 
         windowManager =
-            getSystemService(WINDOW_SERVICE) as WindowManager
+            getSystemService(
+                WINDOW_SERVICE
+            ) as WindowManager
     }
 
     // ============================================================
@@ -113,15 +172,16 @@ class OverlayService : Service() {
         when (intent?.action) {
 
             // ----------------------------------------------------
-            // INICIAR OVERLAY
+            // START
             // ----------------------------------------------------
 
             ACTION_START -> {
 
                 baseElapsed =
-                    intent
-                        .getIntExtra("elapsedMs", 0)
-                        .toLong()
+                    intent.getIntExtra(
+                        "elapsedMs",
+                        0
+                    ).toLong()
 
                 running =
                     intent.getBooleanExtra(
@@ -130,12 +190,14 @@ class OverlayService : Service() {
                     )
 
                 current =
-                    intent.getStringExtra("current")
-                        ?: "Início"
+                    intent.getStringExtra(
+                        "current"
+                    ) ?: "Início"
 
                 next =
-                    intent.getStringExtra("next")
-                        ?: "FINAL"
+                    intent.getStringExtra(
+                        "next"
+                    ) ?: "FINAL"
 
                 startedAt =
                     SystemClock.elapsedRealtime()
@@ -144,15 +206,16 @@ class OverlayService : Service() {
             }
 
             // ----------------------------------------------------
-            // ATUALIZAR OVERLAY
+            // UPDATE
             // ----------------------------------------------------
 
             ACTION_UPDATE -> {
 
                 baseElapsed =
-                    intent
-                        .getIntExtra("elapsedMs", 0)
-                        .toLong()
+                    intent.getIntExtra(
+                        "elapsedMs",
+                        0
+                    ).toLong()
 
                 running =
                     intent.getBooleanExtra(
@@ -161,12 +224,14 @@ class OverlayService : Service() {
                     )
 
                 current =
-                    intent.getStringExtra("current")
-                        ?: current
+                    intent.getStringExtra(
+                        "current"
+                    ) ?: current
 
                 next =
-                    intent.getStringExtra("next")
-                        ?: next
+                    intent.getStringExtra(
+                        "next"
+                    ) ?: next
 
                 startedAt =
                     SystemClock.elapsedRealtime()
@@ -175,10 +240,11 @@ class OverlayService : Service() {
             }
 
             // ----------------------------------------------------
-            // PARAR OVERLAY
+            // STOP
             // ----------------------------------------------------
 
             ACTION_STOP -> {
+
                 stopOverlay()
             }
         }
@@ -192,54 +258,57 @@ class OverlayService : Service() {
 
     private fun showOverlay() {
 
-        if (!Settings.canDrawOverlays(this)) {
+        if (
+            !Settings.canDrawOverlays(this)
+        ) {
             return
         }
 
-        if (overlayView != null) {
+        if (
+            overlayView != null
+        ) {
             return
         }
 
-        // --------------------------------------------------------
-        // CONTAINER
-        // --------------------------------------------------------
+        val root =
+            LinearLayout(this).apply {
 
-        val root = LinearLayout(this).apply {
+                orientation =
+                    LinearLayout.VERTICAL
 
-            orientation =
-                LinearLayout.VERTICAL
-
-            setPadding(
-                18,
-                12,
-                18,
-                12
-            )
-
-            setBackgroundColor(
-                Color.argb(
-                    220,
-                    15,
-                    17,
-                    20
+                setPadding(
+                    18,
+                    12,
+                    18,
+                    12
                 )
-            )
-        }
 
-        // --------------------------------------------------------
+                setBackgroundColor(
+                    Color.argb(
+                        220,
+                        15,
+                        17,
+                        20
+                    )
+                )
+            }
+
+        // ========================================================
         // TIMER
-        // --------------------------------------------------------
+        // ========================================================
 
         timerText =
             TextView(this).apply {
 
-                text = "00:00.00"
+                text =
+                    "00:00.00"
 
                 setTextColor(
                     Color.WHITE
                 )
 
-                textSize = 28f
+                textSize =
+                    28f
 
                 setTypeface(
                     typeface,
@@ -247,9 +316,9 @@ class OverlayService : Service() {
                 )
             }
 
-        // --------------------------------------------------------
+        // ========================================================
         // SPLIT ATUAL
-        // --------------------------------------------------------
+        // ========================================================
 
         currentText =
             TextView(this).apply {
@@ -258,12 +327,13 @@ class OverlayService : Service() {
                     Color.GREEN
                 )
 
-                textSize = 15f
+                textSize =
+                    15f
             }
 
-        // --------------------------------------------------------
+        // ========================================================
         // PRÓXIMO SPLIT
-        // --------------------------------------------------------
+        // ========================================================
 
         nextText =
             TextView(this).apply {
@@ -272,30 +342,42 @@ class OverlayService : Service() {
                     Color.LTGRAY
                 )
 
-                textSize = 13f
+                textSize =
+                    13f
             }
 
-        root.addView(timerText)
-        root.addView(currentText)
-        root.addView(nextText)
+        root.addView(
+            timerText
+        )
+
+        root.addView(
+            currentText
+        )
+
+        root.addView(
+            nextText
+        )
 
         // ========================================================
-        // TIPO DA JANELA
+        // TIPO DE JANELA
         // ========================================================
 
         val type =
-            if (Build.VERSION.SDK_INT >=
+            if (
+                Build.VERSION.SDK_INT >=
                 Build.VERSION_CODES.O
             ) {
 
-                WindowManager.LayoutParams
+                WindowManager
+                    .LayoutParams
                     .TYPE_APPLICATION_OVERLAY
 
             } else {
 
                 @Suppress("DEPRECATION")
 
-                WindowManager.LayoutParams
+                WindowManager
+                    .LayoutParams
                     .TYPE_PHONE
             }
 
@@ -306,14 +388,22 @@ class OverlayService : Service() {
         params =
             WindowManager.LayoutParams(
 
-                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager
+                    .LayoutParams
+                    .WRAP_CONTENT,
 
-                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager
+                    .LayoutParams
+                    .WRAP_CONTENT,
 
                 type,
 
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                WindowManager
+                    .LayoutParams
+                    .FLAG_NOT_FOCUSABLE or
+                        WindowManager
+                            .LayoutParams
+                            .FLAG_LAYOUT_NO_LIMITS,
 
                 PixelFormat.TRANSLUCENT
 
@@ -323,188 +413,121 @@ class OverlayService : Service() {
                     Gravity.TOP or
                             Gravity.START
 
-                x = 20
-                y = 100
+                x =
+                    20
+
+                y =
+                    100
             }
 
         // ========================================================
-        // CONTROLE DE TOQUE
+        // TOUCH
         // ========================================================
-
-        var downX = 0f
-        var downY = 0f
-
-        var startX = 0
-        var startY = 0
 
         root.setOnTouchListener { view, event ->
 
-            when (event.actionMasked) {
+            when (
+                event.actionMasked
+            ) {
 
-                // =================================================
-                // TOQUE INICIAL
-                // =================================================
+                // ------------------------------------------------
+                // DOWN
+                // ------------------------------------------------
 
                 MotionEvent.ACTION_DOWN -> {
 
-                    downX = event.rawX
-                    downY = event.rawY
+                    downX =
+                        event.rawX
 
-                    tapDownX = event.rawX
-                    tapDownY = event.rawY
+                    downY =
+                        event.rawY
 
                     startX =
-                        params?.x ?: 0
+                        params?.x ?: 20
 
                     startY =
-                        params?.y ?: 0
+                        params?.y ?: 100
 
-                    isDragging = false
+                    moved =
+                        false
 
                     true
                 }
 
-                // =================================================
-                // MOVIMENTO
-                // =================================================
+                // ------------------------------------------------
+                // MOVE
+                // ------------------------------------------------
 
                 MotionEvent.ACTION_MOVE -> {
 
                     val dx =
-                        event.rawX - downX
+                        event.rawX -
+                                downX
 
                     val dy =
-                        event.rawY - downY
+                        event.rawY -
+                                downY
 
-                    // Verifica se realmente está arrastando
                     if (
-                        kotlin.math.abs(dx) > TOUCH_SLOP ||
-                        kotlin.math.abs(dy) > TOUCH_SLOP
+                        kotlin.math.abs(dx) >
+                        TOUCH_SLOP ||
+                        kotlin.math.abs(dy) >
+                        TOUCH_SLOP
                     ) {
 
-                        isDragging = true
+                        moved =
+                            true
+                    }
 
-                        // Cancela possível toque simples
-                        handler.removeCallbacks(
-                            singleTapRunnable
-                        )
+                    if (moved) {
 
-                        params?.let { p ->
+                        params?.x =
+                            startX +
+                                    dx.toInt()
 
-                            p.x =
-                                startX +
-                                        dx.toInt()
+                        params?.y =
+                            startY +
+                                    dy.toInt()
 
-                            p.y =
-                                startY +
-                                        dy.toInt()
+                        try {
 
-                            try {
+                            windowManager
+                                .updateViewLayout(
+                                    view,
+                                    params
+                                )
 
-                                windowManager
-                                    .updateViewLayout(
-                                        view,
-                                        p
-                                    )
-
-                            } catch (_: Exception) {
-                            }
+                        } catch (
+                            _: Exception
+                        ) {
                         }
                     }
 
                     true
                 }
 
-                // =================================================
-                // TOQUE SOLTO
-                // =================================================
+                // ------------------------------------------------
+                // UP
+                // ------------------------------------------------
 
                 MotionEvent.ACTION_UP -> {
 
-                    val dx =
-                        event.rawX - tapDownX
+                    if (!moved) {
 
-                    val dy =
-                        event.rawY - tapDownY
-
-                    val moved =
-                        kotlin.math.abs(dx) > TOUCH_SLOP ||
-                                kotlin.math.abs(dy) > TOUCH_SLOP
-
-                    // ------------------------------------------------
-                    // SE FOI ARRASTO
-                    // ------------------------------------------------
-
-                    if (
-                        moved ||
-                        isDragging
-                    ) {
-
-                        isDragging = false
-
-                        return@setOnTouchListener true
-                    }
-
-                    // ------------------------------------------------
-                    // TOQUE
-                    // ------------------------------------------------
-
-                    val now =
-                        SystemClock.elapsedRealtime()
-
-                    val timeSinceLastTap =
-                        now - lastTapTime
-
-                    if (
-                        lastTapTime != 0L &&
-                        timeSinceLastTap <=
-                        DOUBLE_TAP_TIMEOUT
-                    ) {
-
-                        // =================================================
-                        // DOIS TOQUES = RESET
-                        // =================================================
-
-                        handler.removeCallbacks(
-                            singleTapRunnable
-                        )
-
-                        lastTapTime = 0L
-
-                        resetTimer()
-
-                    } else {
-
-                        // =================================================
-                        // PRIMEIRO TOQUE
-                        // =================================================
-
-                        lastTapTime = now
-
-                        handler.removeCallbacks(
-                            singleTapRunnable
-                        )
-
-                        handler.postDelayed(
-                            singleTapRunnable,
-                            DOUBLE_TAP_TIMEOUT
-                        )
+                        handleTap()
                     }
 
                     true
                 }
 
-                // =================================================
-                // CANCELAMENTO
-                // =================================================
+                // ------------------------------------------------
+                // CANCEL
+                // ------------------------------------------------
 
                 MotionEvent.ACTION_CANCEL -> {
 
-                    handler.removeCallbacks(
-                        singleTapRunnable
-                    )
-
-                    isDragging = false
+                    moved =
+                        false
 
                     true
                 }
@@ -514,10 +537,11 @@ class OverlayService : Service() {
         }
 
         // ========================================================
-        // MOSTRAR OVERLAY
+        // MOSTRAR
         // ========================================================
 
-        overlayView = root
+        overlayView =
+            root
 
         windowManager.addView(
             root,
@@ -528,96 +552,102 @@ class OverlayService : Service() {
             updater
         )
 
-        handler.post(updater)
+        handler.post(
+            updater
+        )
 
         updateUi()
     }
 
     // ============================================================
-    // TOQUE ÚNICO
-    // INICIAR / PAUSAR
+    // DETECTAR TOQUE
     // ============================================================
 
-    private fun toggleTimer() {
+    private fun handleTap() {
 
-        if (running) {
+        if (
+            waitingSecondTap
+        ) {
 
-            // ----------------------------------------------------
-            // PAUSAR
-            // ----------------------------------------------------
+            // ====================================================
+            // SEGUNDO TOQUE
+            // REINICIAR
+            // ====================================================
 
-            val currentElapsed =
-                baseElapsed +
-                        (
-                            SystemClock.elapsedRealtime() -
-                                    startedAt
-                            )
+            handler.removeCallbacks(
+                singleTapRunnable
+            )
 
-            baseElapsed =
-                currentElapsed
+            waitingSecondTap =
+                false
 
-            running = false
+            sendOverlayAction(
+                ACTION_RESTART
+            )
 
         } else {
 
-            // ----------------------------------------------------
-            // INICIAR
-            // ----------------------------------------------------
+            // ====================================================
+            // PRIMEIRO TOQUE
+            // AGUARDA SEGUNDO
+            // ====================================================
 
-            startedAt =
-                SystemClock.elapsedRealtime()
+            waitingSecondTap =
+                true
 
-            running = true
+            handler.postDelayed(
+                singleTapRunnable,
+                DOUBLE_TAP_DELAY
+            )
         }
-
-        updateUi()
     }
 
     // ============================================================
-    // DOIS TOQUES
-    // RESET
+    // ENVIAR COMANDO PARA MAINACTIVITY
     // ============================================================
 
-    private fun resetTimer() {
+    private fun sendOverlayAction(
+        action: String
+    ) {
 
-        running = false
+        val intent =
+            Intent(action).apply {
 
-        baseElapsed = 0L
+                setPackage(
+                    packageName
+                )
+            }
 
-        startedAt =
-            SystemClock.elapsedRealtime()
-
-        current = "Início"
-        next = "FINAL"
-
-        updateUi()
+        sendBroadcast(
+            intent
+        )
     }
 
     // ============================================================
-    // ATUALIZAR INTERFACE
+    // ATUALIZAR UI
     // ============================================================
 
     private fun updateUi() {
 
-        val elapsed: Long
+        val elapsed =
+            if (running) {
 
-        if (running) {
-
-            elapsed =
                 baseElapsed +
                         (
-                            SystemClock.elapsedRealtime() -
+                            SystemClock
+                                .elapsedRealtime() -
                                     startedAt
                             )
 
-        } else {
+            } else {
 
-            elapsed =
                 baseElapsed
-        }
+            }
 
         timerText?.text =
-            formatTime(elapsed)
+            formatTime(
+                elapsed
+            )
 
         currentText?.text =
             "▶ $current"
@@ -673,11 +703,14 @@ class OverlayService : Service() {
                     it
                 )
 
-            } catch (_: Exception) {
+            } catch (
+                _: Exception
+            ) {
             }
         }
 
-        overlayView = null
+        overlayView =
+            null
 
         stopForeground(
             STOP_FOREGROUND_REMOVE
@@ -717,7 +750,8 @@ class OverlayService : Service() {
     // NOTIFICAÇÃO
     // ============================================================
 
-    private fun buildNotification(): Notification {
+    private fun buildNotification():
+        Notification {
 
         return if (
             Build.VERSION.SDK_INT >=
@@ -735,16 +769,21 @@ class OverlayService : Service() {
                     "Overlay ativo"
                 )
                 .setSmallIcon(
-                    android.R.drawable.ic_media_play
+                    android.R.drawable
+                        .ic_media_play
                 )
-                .setOngoing(true)
+                .setOngoing(
+                    true
+                )
                 .build()
 
         } else {
 
             @Suppress("DEPRECATION")
 
-            Notification.Builder(this)
+            Notification.Builder(
+                this
+            )
                 .setContentTitle(
                     "SplitRunner"
                 )
@@ -752,9 +791,12 @@ class OverlayService : Service() {
                     "Overlay ativo"
                 )
                 .setSmallIcon(
-                    android.R.drawable.ic_media_play
+                    android.R.drawable
+                        .ic_media_play
                 )
-                .setOngoing(true)
+                .setOngoing(
+                    true
+                )
                 .build()
         }
     }
@@ -777,15 +819,17 @@ class OverlayService : Service() {
 
             try {
 
-                windowManager.removeView(
-                    it
-                )
+                windowManager
+                    .removeView(it)
 
-            } catch (_: Exception) {
+            } catch (
+                _: Exception
+            ) {
             }
         }
 
-        overlayView = null
+        overlayView =
+            null
 
         super.onDestroy()
     }
@@ -797,6 +841,7 @@ class OverlayService : Service() {
     override fun onBind(
         intent: Intent?
     ): IBinder? {
+
         return null
     }
-}
+}                                   
